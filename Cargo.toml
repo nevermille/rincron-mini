@@ -1,0 +1,19 @@
+[package]
+name = "rincron-mini"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.release]
+lto = true
+strip = true
+
+[dependencies]
+simple-error = "0.2.3"
+serde = { version = "1.0.147", features = ["derive"] }
+serde_json = "1.0.87"
+inotify = "0.10.0"
+shell-escape = "0.1.5"
+signal-hook = "0.3.14"
+nix = "0.26.1"

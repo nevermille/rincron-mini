@@ -1,0 +1,24 @@
+[
+    {
+        "dir": "/tmp",
+        "events": [
+            "ACCESS",
+            "ATTRIB",
+            "CLOSE_WRITE",
+            "CLOSE_NOWRITE",
+            "CREATE",
+            "DELETE",
+            "DELETE_SELF",
+            "MODIFY",
+            "MOVE_SELF",
+            "MOVED_FROM",
+            "MOVED_TO",
+            "OPEN",
+            "ALL_EVENTS"
+        ],
+        "command": [
+            "echo",
+            "\"Event on $#/$@\""
+        ]
+    }
+]
