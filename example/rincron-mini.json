@@ -16,9 +16,6 @@
             "OPEN",
             "ALL_EVENTS"
         ],
-        "command": [
-            "echo",
-            "\"Event on $#/$@\""
-        ]
+        "command": "echo \"Event on $#/$@\""
     }
 ]

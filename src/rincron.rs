@@ -16,13 +16,13 @@ use simple_error::bail;
 
 pub struct Rincron {
     inotify: Inotify,
-    config: HashMap<WatchDescriptor, (String, Vec<String>)>,
+    config: HashMap<WatchDescriptor, (String, String)>,
     sigterm: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
 }
 
 impl Rincron {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn init() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             inotify: Inotify::init()?,
             config: HashMap::new(),
@@ -114,14 +114,14 @@ impl Rincron {
                 continue;
             }
 
-            if !command.is_array() {
-                println!("\"command\" must be an array");
+            if !command.is_string() {
+                println!("\"command\" must be a string");
                 continue;
             }
 
             let dir = dir.as_str().unwrap();
             let events = events.as_array().unwrap();
-            let command = command.as_array().unwrap();
+            let command = command.as_str().unwrap();
 
             let dir_path = Path::new(dir);
 
@@ -132,7 +132,6 @@ impl Rincron {
 
             let in_dir = dir;
             let mut in_events: Option<WatchMask> = None;
-            let mut in_command: Vec<String> = Vec::new();
 
             for event in events {
                 if !event.is_string() {
@@ -157,15 +156,6 @@ impl Rincron {
                 continue;
             }
 
-            for parameter in command {
-                if !parameter.is_string() {
-                    println!("One parameter is not a string: {}", parameter);
-                    continue;
-                }
-
-                in_command.push(parameter.as_str().unwrap().to_string());
-            }
-
             let add = self.inotify.add_watch(in_dir, in_events.unwrap());
 
             if let Err(e) = add {
@@ -174,7 +164,8 @@ impl Rincron {
             }
 
             let watch = add.unwrap();
-            self.config.insert(watch, (in_dir.to_string(), in_command));
+            self.config
+                .insert(watch, (in_dir.to_string(), command.to_string()));
 
             println!("Event added for {}", in_dir);
         }
@@ -246,6 +237,7 @@ impl Rincron {
                     println!("Error while reading events: {}", e);
                 }
 
+                std::thread::sleep(Duration::from_millis(100));
                 continue;
             }
 
@@ -261,18 +253,13 @@ impl Rincron {
                 let (path, command) = event_config.unwrap();
                 let file = event.name.unwrap_or_else(|| OsStr::new(""));
 
-                let mut final_command: Vec<String> = Vec::new();
                 let escaped_path = shell_escape::escape(path.into());
                 let escaped_file = shell_escape::escape(file.to_string_lossy());
 
-                for param in command {
-                    let converted = param
-                        .replace("$@", &escaped_path)
-                        .replace("$#", &escaped_file)
-                        .replace("$$", "$");
-
-                    final_command.push(converted);
-                }
+                let converted = command
+                    .replace("$@", &escaped_path)
+                    .replace("$#", &escaped_file)
+                    .replace("$$", "$");
 
                 let fork = unsafe { fork() };
 
@@ -286,11 +273,11 @@ impl Rincron {
                 if let ForkResult::Child = fork {
                     let _ = setsid();
 
-                    println!("CMD({}) => {}", path, final_command.join(" "));
+                    println!("CMD({}) => {}", path, &converted);
 
                     let cmd = Command::new("bash")
                         .arg("-c")
-                        .arg(final_command.join(" "))
+                        .arg(&converted)
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .stdin(Stdio::null())
@@ -303,14 +290,6 @@ impl Rincron {
                     std::process::exit(0);
                 }
             }
-
-            std::thread::sleep(Duration::from_millis(100));
         }
-    }
-}
-
-impl Default for Rincron {
-    fn default() -> Self {
-        Self::new().unwrap()
     }
 }
