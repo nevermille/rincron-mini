@@ -1,6 +1,6 @@
 [package]
 name = "rincron_mini"
-version = "0.1.0-beta"
+version = "0.2.0-beta"
 edition = "2021"
 authors = ["Camille Nevermind"]
 readme = "README.md"
@@ -15,10 +15,10 @@ lto = true
 strip = true
 
 [dependencies]
-simple-error = "0.2.3"
-serde = { version = "1.0.147", features = ["derive"] }
-serde_json = "1.0.87"
+simple-error = "0.3.0"
+serde = { version = "1.0.0", features = ["derive"] }
+serde_json = "1.0.0"
 inotify = "0.10.0"
-shell-escape = "0.1.5"
-signal-hook = "0.3.14"
-nix = "0.26.1"
+shell-escape = "0.1.0"
+signal-hook = "0.3.0"
+nix = "0.26.0"
