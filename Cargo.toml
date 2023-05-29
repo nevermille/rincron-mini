@@ -1,7 +1,12 @@
 [package]
-name = "rincron-mini"
-version = "0.1.0"
+name = "rincron_mini"
+version = "0.1.0-beta"
 edition = "2021"
+authors = ["Camille Nevermind"]
+readme = "README.md"
+description = "A replacement for incron written in Rust"
+repository = "https://github.com/nevermille/rincron-mini"
+license = "GPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
