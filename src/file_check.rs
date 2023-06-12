@@ -51,7 +51,13 @@ impl FileCheck {
             self.size = 0;
         }
 
+        // Size extraction
         let new_size = metadata.unwrap().len();
+
+        println!(
+            "File {} checked, was {} bytes long, now {}",
+            &self.path, self.size, new_size
+        );
 
         // If size hadn't changed, we trigger the command
         if new_size == self.size {
@@ -59,6 +65,7 @@ impl FileCheck {
         }
 
         // If not, we reset for a new check
+
         self.size = new_size;
         self.next_check = self.check_interval;
         true

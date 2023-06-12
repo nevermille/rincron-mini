@@ -238,7 +238,7 @@ impl Rincron {
             // File information creation
             let fc = FileCheck::new(
                 &full_path.to_string_lossy(),
-                element.check_interval,
+                element.check_interval * 1000,
                 &converted_cmd,
             );
 
@@ -255,6 +255,28 @@ impl Rincron {
     pub fn file_watch_tick(&mut self) {
         for file in &mut self.file_checks {
             file.tick(self.watch_interval as i64);
+        }
+    }
+
+    /// Watch all file sizes
+    pub fn file_watch(&mut self) {
+        let mut finished_files = Vec::new();
+
+        for (index, file) in &mut self.file_checks.iter_mut().enumerate() {
+            // If file did not change, the upload/copy is considered finished
+            if !file.has_changed() {
+                println!("File {} is now ready for execution", &file.path);
+                self.file_executions.push(file.clone());
+                finished_files.push(index);
+            }
+        }
+
+        // We delete finished file checks
+        finished_files.sort();
+        finished_files.reverse();
+
+        for i in finished_files {
+            self.file_checks.remove(i);
         }
     }
 
@@ -312,6 +334,7 @@ impl Rincron {
             self.watch_children();
             self.file_watch_tick();
             self.watch_events(&mut buffer);
+            self.file_watch();
             self.file_execute();
         }
     }
