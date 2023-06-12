@@ -1,16 +1,15 @@
 use crate::file_check::FileCheck;
 use crate::watch_element::WatchElement;
 use crate::watch_manager::WatchManager;
-use inotify::{Inotify, WatchDescriptor, WatchMask};
-use nix::unistd::{fork, setsid, ForkResult};
+use glob::glob;
+use inotify::Inotify;
 use serde_json::Value;
 use simple_error::bail;
-use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::Path;
-use std::process::Command;
 use std::process::Stdio;
+use std::process::{Child, Command};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,6 +21,7 @@ pub struct Rincron {
     sigterm: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
     watch_interval: i64,
+    child_processes: Vec<Child>,
 }
 
 impl Rincron {
@@ -33,12 +33,51 @@ impl Rincron {
             sigterm: Arc::new(AtomicBool::new(false)),
             reload: Arc::new(AtomicBool::new(false)),
             watch_interval: 100,
+            child_processes: Vec::new(),
         })
     }
 
+    /// Read all config files
+    ///
+    /// Config files are found in /etc/rincron-mini directory
+    /// If you don't want a folder, you can use /etc/rincron-mini.json
     pub fn read_configs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.manager.begin_transaction();
-        self.read_config("/etc/rincron-mini.json");
+
+        // First we check the main config file
+        if Path::new("/etc/rincron-mini.json").exists() {
+            if let Err(e) = self.read_config("/etc/rincron-mini.json") {
+                println!(
+                    "Error while reading config file /etc/rincron-mini.json: {}",
+                    e
+                );
+            }
+        }
+
+        // After that, we check the folder for more config files
+        let files = glob("/etc/rincron-mini/*.json");
+
+        // It's horrible but I don't know how to properly write this (yet)
+        if let Ok(v) = files {
+            // We process each entry found in glob scanning
+            for entry in v {
+                // I don't know why but you can have sub errors
+                match entry {
+                    // Finally, a found config file
+                    Ok(p) => {
+                        println!("Config file found: {}", p.display());
+                        if let Err(e) = self.read_config(&p.to_string_lossy()) {
+                            println!("Error while reading config file {}: {}", p.display(), e);
+                        }
+                    }
+                    // I don't know how this error is triggered
+                    Err(e) => {
+                        println!("Error while scanning config files: {}", e);
+                    }
+                }
+            }
+        }
+
         self.manager.end_transaction(&mut self.inotify);
 
         Ok(())
@@ -49,15 +88,13 @@ impl Rincron {
         let cfg_file = Path::new(path);
 
         if !cfg_file.exists() {
-            println!("The config file doesn't exist!");
-            bail!("The config file doesn't exist!");
+            bail!("The config file {} doesn't exist", path);
         }
 
         // Read config file
         let cfg_string = std::fs::read_to_string(cfg_file);
 
         if let Err(e) = cfg_string {
-            println!("Error while reading config file: {}", e);
             bail!("Error while reading config file: {}", e.to_string());
         }
 
@@ -66,7 +103,6 @@ impl Rincron {
         let cfg_json = serde_json::from_str(&cfg_string);
 
         if let Err(e) = cfg_json {
-            println!("Error while deserializing JSON: {}", e);
             bail!("Error while deserializing JSON: {}", e.to_string());
         }
 
@@ -74,7 +110,6 @@ impl Rincron {
 
         // Read all dirs
         if !cfg_json.is_array() {
-            println!("Config JSON must be an array");
             bail!("Config JSON must be an array");
         }
 
@@ -85,10 +120,7 @@ impl Rincron {
 
             match we {
                 Err(e) => println!("Error during parsing: {}", e),
-                Ok(v) => {
-                    println!("Event added for {}", &v.path);
-                    self.manager.add_element(v)
-                }
+                Ok(v) => self.manager.add_element(v),
             }
         }
         Ok(())
