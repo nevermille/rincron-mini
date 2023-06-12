@@ -1,3 +1,19 @@
+// This file is part of rincron-mini <https://github.com/nevermille/rincron-mini>
+// Copyright (C) 2022-2023 Camille Nevermind
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use crate::file_check::FileCheck;
 use crate::watch_element::WatchElement;
 use crate::watch_manager::WatchManager;
@@ -8,25 +24,43 @@ use simple_error::bail;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::Path;
+use std::process::Child;
+use std::process::Command;
 use std::process::Stdio;
-use std::process::{Child, Command};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 use wildmatch::WildMatch;
 
+/// The main program
 pub struct Rincron {
+    /// The inotify object
     inotify: Inotify,
+
+    /// The events manager
     manager: WatchManager,
+
+    /// The files to check
     file_checks: Vec<FileCheck>,
+
+    /// The files to execute
     file_executions: Vec<FileCheck>,
+
+    /// The sigterm signal
     sigterm: Arc<AtomicBool>,
+
+    /// The sigusr1 signal
     reload: Arc<AtomicBool>,
+
+    /// The delay between event watches in milliseconds
     watch_interval: u64,
+
+    /// The spawned children
     child_processes: Vec<Child>,
 }
 
 impl Rincron {
+    /// Initiolizes ricron with inotify
     pub fn init() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             inotify: Inotify::init()?,
@@ -40,7 +74,7 @@ impl Rincron {
         })
     }
 
-    /// Read all config files
+    /// Reads all config files
     ///
     /// Config files are found in /etc/rincron-mini directory
     /// If you don't want a folder, you can use /etc/rincron-mini.json
@@ -84,6 +118,11 @@ impl Rincron {
         self.manager.end_transaction(&mut self.inotify);
     }
 
+    /// Reads a config file
+    ///
+    /// # Parameters
+    ///
+    /// * `path`: The config file path
     pub fn read_config(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Check if config file exists
         let cfg_file = Path::new(path);
@@ -307,6 +346,7 @@ impl Rincron {
         self.file_executions = Vec::new();
     }
 
+    /// Executes the main loop
     pub fn execute(&mut self) {
         let mut buffer = [0; 1024];
 
