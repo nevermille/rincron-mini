@@ -41,6 +41,7 @@ impl WatchManager {
         }
 
         // If it does not exist, we put it in new elements
+        println!("Event added for {}", &new_element.path);
         self.new_elements.push(new_element);
     }
 
