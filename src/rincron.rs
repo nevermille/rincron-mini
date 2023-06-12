@@ -168,17 +168,7 @@ impl Rincron {
                 continue;
             }
 
-            if let Err(e) = events {
-                // We need to notify for any error not related to a lock
-                if e.kind() != ErrorKind::WouldBlock {
-                    println!("Error while reading events: {}", e);
-                }
-
-                std::thread::sleep(Duration::from_millis(self.watch_interval));
-                continue;
-            }
-            let events = events.unwrap();
-
+            // We watch spawned childs to report exit status
             let mut finished_children = Vec::new();
             for (index, child) in self.child_processes.iter_mut().enumerate() {
                 match child.try_wait() {
@@ -202,6 +192,17 @@ impl Rincron {
             for i in finished_children {
                 self.child_processes.remove(i);
             }
+
+            if let Err(e) = events {
+                // We need to notify for any error not related to an empty buffer
+                if e.kind() != ErrorKind::WouldBlock {
+                    println!("Error while reading events: {}", e);
+                }
+
+                std::thread::sleep(Duration::from_millis(self.watch_interval));
+                continue;
+            }
+            let events = events.unwrap();
 
             // Events management
             for event in events {
