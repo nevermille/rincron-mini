@@ -62,6 +62,10 @@ impl WatchElement {
         // Will be deprecated in 0.3.0-beta
         if path.is_none() {
             path = value.get("dir");
+
+            if path.is_some() {
+                println!("Warning: 'dir' key used instead of 'path', this is deprecated and will be removed in a future version");
+            }
         }
 
         let events = value.get("events");
