@@ -20,7 +20,7 @@ pub struct Rincron {
     file_checks: Vec<FileCheck>,
     sigterm: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
-    watch_interval: i64,
+    watch_interval: u64,
     child_processes: Vec<Child>,
 }
 
@@ -41,7 +41,7 @@ impl Rincron {
     ///
     /// Config files are found in /etc/rincron-mini directory
     /// If you don't want a folder, you can use /etc/rincron-mini.json
-    pub fn read_configs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn read_configs(&mut self) {
         self.manager.begin_transaction();
 
         // First we check the main config file
@@ -79,8 +79,6 @@ impl Rincron {
         }
 
         self.manager.end_transaction(&mut self.inotify);
-
-        Ok(())
     }
 
     pub fn read_config(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -129,60 +127,83 @@ impl Rincron {
     pub fn execute(&mut self) {
         let mut buffer = [0; 1024];
 
+        // SIGINT managment
         let hook =
             signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&self.sigterm));
-
         if hook.is_err() {
-            println!("WARNING! Unable to catch SIGINT signal. Program will continue running but child processes might be killed when rincron is stopped");
+            println!("WARNING! Unable to catch SIGINT signal. Program will continue running but might not exit properly");
         }
 
+        // SIGTERM managment
         let hook =
             signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&self.sigterm));
-
         if hook.is_err() {
-            println!("WARNING! Unable to catch SIGTERM signal. Program will continue running but child processes might be killed when rincron is stopped");
+            println!("WARNING! Unable to catch SIGTERM signal. Program will continue running but might not exit properly");
         }
 
+        // SIGTERM managment
         let hook =
             signal_hook::flag::register(signal_hook::consts::SIGUSR1, Arc::clone(&self.reload));
-
         if hook.is_err() {
-            println!("WARNING! Unable to catch SIGUSR1 signal. Program will continue running but you may not be able to reload");
+            println!("WARNING! Unable to catch SIGUSR1 signal. Program will continue running but you may not be able to reload configs");
         }
 
         loop {
+            // Read inotify events buffer
             let events = self.inotify.read_events(&mut buffer);
 
+            // Exit requested
             if self.sigterm.load(std::sync::atomic::Ordering::Relaxed) {
                 println!("Exiting rincron, thanks for using it");
                 break;
             }
 
+            // Reload requested
             if self.reload.load(std::sync::atomic::Ordering::Relaxed) {
                 println!("Reloading rincron");
                 self.reload
                     .store(false, std::sync::atomic::Ordering::Relaxed);
 
-                let load = self.read_configs();
-
-                if let Err(e) = load {
-                    println!("Error while loading config: {}", e);
-                }
-
+                self.read_configs();
                 continue;
             }
 
             if let Err(e) = events {
+                // We need to notify for any error not related to a lock
                 if e.kind() != ErrorKind::WouldBlock {
                     println!("Error while reading events: {}", e);
                 }
 
-                std::thread::sleep(Duration::from_millis(100));
+                std::thread::sleep(Duration::from_millis(self.watch_interval));
                 continue;
             }
-
             let events = events.unwrap();
 
+            let mut finished_children = Vec::new();
+            for (index, child) in self.child_processes.iter_mut().enumerate() {
+                match child.try_wait() {
+                    Err(e) => {
+                        println!("Error while checking child {}: {}", child.id(), e);
+                        finished_children.push(index);
+                    }
+                    Ok(Some(v)) => {
+                        println!("Child {} exited with status {}", child.id(), v);
+                        finished_children.push(index);
+                    }
+                    _ => { /* Not exited*/ }
+                }
+            }
+
+            // We need indexes in reverse order to not remove wrong children
+            finished_children.sort();
+            finished_children.reverse();
+
+            // Time to remove finished children, now that the var is free from borrows
+            for i in finished_children {
+                self.child_processes.remove(i);
+            }
+
+            // Events management
             for event in events {
                 let event_config = self.manager.search_element(&event.wd);
 
@@ -211,9 +232,14 @@ impl Rincron {
                     .stdin(Stdio::null())
                     .spawn();
 
-                if let Err(e) = cmd {
-                    println!("Unable to launch command: {}", e);
-                }
+                match cmd {
+                    Err(e) => {
+                        println!("Unable to launch command: {}", e);
+                    }
+                    Ok(v) => {
+                        self.child_processes.push(v);
+                    }
+                };
             }
         }
     }
