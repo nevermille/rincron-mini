@@ -3,7 +3,6 @@ use crate::watch_element::WatchElement;
 use crate::watch_manager::WatchManager;
 use glob::glob;
 use inotify::Inotify;
-use nix::sys::ptrace::cont;
 use serde_json::Value;
 use simple_error::bail;
 use std::ffi::OsStr;
@@ -128,6 +127,7 @@ impl Rincron {
         Ok(())
     }
 
+    /// Hook vars to system signals
     pub fn hook_signals(&mut self) {
         // SIGINT managment
         let hook =
@@ -151,6 +151,7 @@ impl Rincron {
         }
     }
 
+    /// Check if children have exited
     pub fn watch_children(&mut self) {
         // We watch spawned childs to report exit status
         let mut finished_children = Vec::new();
@@ -178,6 +179,11 @@ impl Rincron {
         }
     }
 
+    /// Read all events from inotify
+    ///
+    /// # Parameters
+    ///
+    /// * `buffer`: A buffer to write events
     pub fn watch_events(&mut self, buffer: &mut [u8]) {
         // Read inotify events buffer
         let events = self.inotify.read_events(buffer);
@@ -210,7 +216,7 @@ impl Rincron {
 
             // If the file does not match the desired string, we don't do anything
             if !element.file_match.is_empty()
-                && !WildMatch::new(&escaped_file).matches(&element.file_match)
+                && !WildMatch::new(&element.file_match).matches(&escaped_file)
             {
                 println!(
                     "File {} does not match {}, event discarded",
@@ -247,6 +253,7 @@ impl Rincron {
         }
     }
 
+    /// Substract elapsed time for all files checkers
     pub fn file_watch_tick(&mut self) {
         for file in &mut self.file_checks {
             file.tick(self.watch_interval as i64);
@@ -275,6 +282,7 @@ impl Rincron {
                 continue;
             }
 
+            // Main program
             self.watch_children();
             self.file_watch_tick();
             self.watch_events(&mut buffer);
