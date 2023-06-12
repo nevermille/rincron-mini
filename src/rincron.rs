@@ -237,6 +237,7 @@ impl Rincron {
                         println!("Unable to launch command: {}", e);
                     }
                     Ok(v) => {
+                        println!("Child {} spawned", v.id());
                         self.child_processes.push(v);
                     }
                 };
