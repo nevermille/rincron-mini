@@ -1,9 +1,12 @@
-use simple_error::bail;
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct FileCheck {
     /// The file's path
     pub path: String,
+
+    /// The command to execute at the end
+    pub cmd: String,
 
     /// The previous size of the file
     pub size: u64,
@@ -21,7 +24,7 @@ impl FileCheck {
     /// # Parameters
     ///
     /// * `time`: The time passed in milliseconds
-    pub fn pass_time(&mut self, time: i64) {
+    pub fn tick(&mut self, time: i64) {
         self.next_check -= time;
     }
 

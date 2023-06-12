@@ -3,6 +3,7 @@ use crate::watch_element::WatchElement;
 use crate::watch_manager::WatchManager;
 use glob::glob;
 use inotify::Inotify;
+use nix::sys::ptrace::cont;
 use serde_json::Value;
 use simple_error::bail;
 use std::ffi::OsStr;
@@ -13,11 +14,13 @@ use std::process::{Child, Command};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
+use wildmatch::WildMatch;
 
 pub struct Rincron {
     inotify: Inotify,
     manager: WatchManager,
     file_checks: Vec<FileCheck>,
+    file_executions: Vec<FileCheck>,
     sigterm: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
     watch_interval: u64,
@@ -30,6 +33,7 @@ impl Rincron {
             inotify: Inotify::init()?,
             manager: WatchManager::default(),
             file_checks: Vec::new(),
+            file_executions: Vec::new(),
             sigterm: Arc::new(AtomicBool::new(false)),
             reload: Arc::new(AtomicBool::new(false)),
             watch_interval: 100,
@@ -124,9 +128,7 @@ impl Rincron {
         Ok(())
     }
 
-    pub fn execute(&mut self) {
-        let mut buffer = [0; 1024];
-
+    pub fn hook_signals(&mut self) {
         // SIGINT managment
         let hook =
             signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&self.sigterm));
@@ -147,11 +149,116 @@ impl Rincron {
         if hook.is_err() {
             println!("WARNING! Unable to catch SIGUSR1 signal. Program will continue running but you may not be able to reload configs");
         }
+    }
+
+    pub fn watch_children(&mut self) {
+        // We watch spawned childs to report exit status
+        let mut finished_children = Vec::new();
+        for (index, child) in self.child_processes.iter_mut().enumerate() {
+            match child.try_wait() {
+                Err(e) => {
+                    println!("Error while checking child {}: {}", child.id(), e);
+                    finished_children.push(index);
+                }
+                Ok(Some(v)) => {
+                    println!("Child {} exited with {}", child.id(), v);
+                    finished_children.push(index);
+                }
+                _ => { /* Not exited*/ }
+            }
+        }
+
+        // We need indexes in reverse order to not remove wrong children
+        finished_children.sort();
+        finished_children.reverse();
+
+        // Time to remove finished children, now that the var is free from borrows
+        for i in finished_children {
+            self.child_processes.remove(i);
+        }
+    }
+
+    pub fn watch_events(&mut self, buffer: &mut [u8]) {
+        // Read inotify events buffer
+        let events = self.inotify.read_events(buffer);
+
+        if let Err(e) = events {
+            // We need to notify for any error not related to an empty buffer
+            if e.kind() != ErrorKind::WouldBlock {
+                println!("Error while reading events: {}", e);
+            }
+
+            std::thread::sleep(Duration::from_millis(self.watch_interval));
+            return;
+        }
+        let events = events.unwrap();
+
+        // Events management
+        for event in events {
+            // We need more info for this descriptor
+            let event_config = self.manager.search_element(&event.wd);
+
+            // We do nothing if element not found
+            if event_config.is_none() {
+                continue;
+            }
+
+            let element = event_config.unwrap();
+            let file = event.name.unwrap_or_else(|| OsStr::new(""));
+            let escaped_path = shell_escape::escape((&element.path).into());
+            let escaped_file = shell_escape::escape(file.to_string_lossy());
+
+            // If the file does not match the desired string, we don't do anything
+            if !element.file_match.is_empty()
+                && !WildMatch::new(&escaped_file).matches(&element.file_match)
+            {
+                println!(
+                    "File {} does not match {}, event discarded",
+                    &escaped_file, &element.file_match
+                );
+                continue;
+            }
+
+            let converted = element
+                .command
+                .replace("$@", &escaped_path)
+                .replace("$#", &escaped_file)
+                .replace("$$", "$");
+
+            println!("CMD({}) => {}", element.path, &converted);
+
+            let cmd = Command::new("bash")
+                .arg("-c")
+                .arg(&converted)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .spawn();
+
+            match cmd {
+                Err(e) => {
+                    println!("Unable to launch command: {}", e);
+                }
+                Ok(v) => {
+                    println!("Child {} spawned", v.id());
+                    self.child_processes.push(v);
+                }
+            };
+        }
+    }
+
+    pub fn file_watch_tick(&mut self) {
+        for file in &mut self.file_checks {
+            file.tick(self.watch_interval as i64);
+        }
+    }
+
+    pub fn execute(&mut self) {
+        let mut buffer = [0; 1024];
+
+        self.hook_signals();
 
         loop {
-            // Read inotify events buffer
-            let events = self.inotify.read_events(&mut buffer);
-
             // Exit requested
             if self.sigterm.load(std::sync::atomic::Ordering::Relaxed) {
                 println!("Exiting rincron, thanks for using it");
@@ -168,81 +275,9 @@ impl Rincron {
                 continue;
             }
 
-            // We watch spawned childs to report exit status
-            let mut finished_children = Vec::new();
-            for (index, child) in self.child_processes.iter_mut().enumerate() {
-                match child.try_wait() {
-                    Err(e) => {
-                        println!("Error while checking child {}: {}", child.id(), e);
-                        finished_children.push(index);
-                    }
-                    Ok(Some(v)) => {
-                        println!("Child {} exited with status {}", child.id(), v);
-                        finished_children.push(index);
-                    }
-                    _ => { /* Not exited*/ }
-                }
-            }
-
-            // We need indexes in reverse order to not remove wrong children
-            finished_children.sort();
-            finished_children.reverse();
-
-            // Time to remove finished children, now that the var is free from borrows
-            for i in finished_children {
-                self.child_processes.remove(i);
-            }
-
-            if let Err(e) = events {
-                // We need to notify for any error not related to an empty buffer
-                if e.kind() != ErrorKind::WouldBlock {
-                    println!("Error while reading events: {}", e);
-                }
-
-                std::thread::sleep(Duration::from_millis(self.watch_interval));
-                continue;
-            }
-            let events = events.unwrap();
-
-            // Events management
-            for event in events {
-                let event_config = self.manager.search_element(&event.wd);
-
-                if event_config.is_none() {
-                    continue;
-                }
-
-                let element = event_config.unwrap();
-                let file = event.name.unwrap_or_else(|| OsStr::new(""));
-                let escaped_path = shell_escape::escape((&element.path).into());
-                let escaped_file = shell_escape::escape(file.to_string_lossy());
-
-                let converted = element
-                    .command
-                    .replace("$@", &escaped_path)
-                    .replace("$#", &escaped_file)
-                    .replace("$$", "$");
-
-                println!("CMD({}) => {}", element.path, &converted);
-
-                let cmd = Command::new("bash")
-                    .arg("-c")
-                    .arg(&converted)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .stdin(Stdio::null())
-                    .spawn();
-
-                match cmd {
-                    Err(e) => {
-                        println!("Unable to launch command: {}", e);
-                    }
-                    Ok(v) => {
-                        println!("Child {} spawned", v.id());
-                        self.child_processes.push(v);
-                    }
-                };
-            }
+            self.watch_children();
+            self.file_watch_tick();
+            self.watch_events(&mut buffer);
         }
     }
 }
