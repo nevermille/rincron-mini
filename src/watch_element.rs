@@ -59,6 +59,13 @@ impl WatchElement {
             "MOVED_TO" | "IN_MOVED_TO" => Some(WatchMask::MOVED_TO),
             "OPEN" | "IN_OPEN" => Some(WatchMask::OPEN),
             "ALL_EVENTS" | "IN_ALL_EVENTS" => Some(WatchMask::ALL_EVENTS),
+            "MOVE" | "IN_MOVE" => Some(WatchMask::MOVE),
+            "CLOSE" | "IN_CLOSE" => Some(WatchMask::MOVE),
+            "DONT_FOLLOW" | "IN_DONT_FOLLOW" => Some(WatchMask::DONT_FOLLOW),
+            "EXCL_UNLINK" | "IN_EXCL_UNLINK" => Some(WatchMask::EXCL_UNLINK),
+            "MASK_ADD" | "IN_MASK_ADD" => Some(WatchMask::MASK_ADD),
+            "ONESHOT" | "IN_ONESHOT" => Some(WatchMask::ONESHOT),
+            "ONLYDIR" | "IN_ONLYDIR" => Some(WatchMask::ONLYDIR),
             _ => None,
         }
     }
