@@ -70,12 +70,13 @@ impl FileCheck {
     ///
     /// * `path`: The file to check
     /// * `check_interval`: The check time interval in milliseconds
-    pub fn from_path_and_check_interval(path: &str, check_interval: i64) -> Self {
+    pub fn new(path: &str, check_interval: i64, cmd: &str) -> Self {
         Self {
             path: path.to_string(),
             size: 0,
             next_check: check_interval,
             check_interval,
+            cmd: cmd.to_string(),
         }
     }
 }
