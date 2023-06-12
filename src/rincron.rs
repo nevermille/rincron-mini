@@ -215,6 +215,8 @@ impl Rincron {
             let escaped_file = shell_escape::escape(file.to_string_lossy());
             let full_path = Path::new(&escaped_path.to_string()).join(&escaped_file.to_string());
 
+            println!("Event found for {} ({})", &escaped_path, &escaped_file);
+
             // If the file does not match the desired string, we don't do anything
             if !element.file_match.is_empty()
                 && !WildMatch::new(&element.file_match).matches(&escaped_file)
@@ -279,6 +281,8 @@ impl Rincron {
                 }
             };
         }
+
+        self.file_executions = Vec::new();
     }
 
     pub fn execute(&mut self) {
@@ -308,6 +312,7 @@ impl Rincron {
             self.watch_children();
             self.file_watch_tick();
             self.watch_events(&mut buffer);
+            self.file_execute();
         }
     }
 }
