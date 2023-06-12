@@ -213,6 +213,7 @@ impl Rincron {
             let file = event.name.unwrap_or_else(|| OsStr::new(""));
             let escaped_path = shell_escape::escape((&element.path).into());
             let escaped_file = shell_escape::escape(file.to_string_lossy());
+            let full_path = Path::new(&escaped_path.to_string()).join(&escaped_file.to_string());
 
             // If the file does not match the desired string, we don't do anything
             if !element.file_match.is_empty()
@@ -225,17 +226,44 @@ impl Rincron {
                 continue;
             }
 
-            let converted = element
+            // Command line creation
+            let converted_cmd = element
                 .command
                 .replace("$@", &escaped_path)
                 .replace("$#", &escaped_file)
                 .replace("$$", "$");
 
-            println!("CMD({}) => {}", element.path, &converted);
+            // File information creation
+            let fc = FileCheck::new(
+                &full_path.to_string_lossy(),
+                element.check_interval,
+                &converted_cmd,
+            );
+
+            // If a size check is needed, we put it in file checks instead of file executions
+            if element.check_interval == 0 {
+                self.file_executions.push(fc);
+            } else {
+                self.file_checks.push(fc);
+            }
+        }
+    }
+
+    /// Substract elapsed time for all files checkers
+    pub fn file_watch_tick(&mut self) {
+        for file in &mut self.file_checks {
+            file.tick(self.watch_interval as i64);
+        }
+    }
+
+    /// Executes files
+    pub fn file_execute(&mut self) {
+        for file in &self.file_executions {
+            println!("CMD({}) => {}", &file.path, &file.cmd);
 
             let cmd = Command::new("bash")
                 .arg("-c")
-                .arg(&converted)
+                .arg(&file.cmd)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .stdin(Stdio::null())
@@ -253,16 +281,10 @@ impl Rincron {
         }
     }
 
-    /// Substract elapsed time for all files checkers
-    pub fn file_watch_tick(&mut self) {
-        for file in &mut self.file_checks {
-            file.tick(self.watch_interval as i64);
-        }
-    }
-
     pub fn execute(&mut self) {
         let mut buffer = [0; 1024];
 
+        self.read_configs();
         self.hook_signals();
 
         loop {

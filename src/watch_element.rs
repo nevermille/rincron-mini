@@ -77,7 +77,7 @@ impl WatchElement {
 
         let check_interval = value
             .get("check_interval")
-            .unwrap_or(&Value::Number(Number::from(1000)))
+            .unwrap_or(&Value::Number(Number::from(0)))
             .as_i64()
             .unwrap_or_default();
 

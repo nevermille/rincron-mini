@@ -13,6 +13,5 @@ fn main() {
     println!("OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.");
 
     let mut rincron = Rincron::init().unwrap_or_else(|_| std::process::exit(1));
-    let _ = rincron.read_configs();
     rincron.execute();
 }
