@@ -1,0 +1,14 @@
+#! /bin/bash
+
+systemctl enable rincron-mini
+systemctl start rincron-mini
+
+if [[ ! -f "/etc/rincron-mini.json" ]];
+then
+	echo "[]" > /etc/rincron-mini.json
+fi
+
+if [[ ! -d "/etc/rincron-mini" ]];
+then
+        mkdir -p /etc/rincron-mini
+fi

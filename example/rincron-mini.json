@@ -1,6 +1,6 @@
 [
     {
-        "dir": "/tmp",
+        "path": "/tmp",
         "events": [
             "ACCESS",
             "ATTRIB",
