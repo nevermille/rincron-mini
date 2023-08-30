@@ -1,0 +1,9 @@
+[Unit]
+Description=Rincron-mini
+
+[Service]
+ExecStart=/usr/bin/rincron-mini
+ExecReload=/bin/kill -USR1 $MAINPID
+
+[Install]
+WantedBy=multi-user.target

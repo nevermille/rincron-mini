@@ -12,7 +12,12 @@ cargo install rincron_mini
 
 ## Configuration
 
-Rincron-Mini uses JSON files as configuration files. You can put them inside `/etc/rincron-mini/` with a .json extension or you can put one at `/etc/rincron-mini.json`
+Rincron-Mini uses JSON files as configuration files. You can use a single file or you can use multiple files inside a directory. Here you have expected paths :
+
+|      | Single file                       | Multiple files                      |
+|------|-----------------------------------|-------------------------------------|
+| root | `/etc/rincron-mini.json`          | `/etc/rincron-mini/*.json`          |
+| user | `$HOME/.config/rincron-mini.json` | `$HOME/.config/rincron-mini/*.json` |
 
 ### File format
 
@@ -93,6 +98,5 @@ Example with a check on zip files:
 This sofware is unfortunately not a full incrontab replacement. There are some limitations:
 
 * The `$%` and `$&` are not implemented
-* Only the user who has executed the program (probably root) will execute commands, there is no configs for users
 
 I'll try to improve the software, to make it more powerfull.

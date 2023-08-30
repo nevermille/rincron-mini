@@ -1,0 +1,5 @@
+Package: rincron-mini
+Version: 0.3-rc1
+Maintainer: Camille Nevermind
+Architecture: amd64
+Description: A small incrontab replacement written in Rust
