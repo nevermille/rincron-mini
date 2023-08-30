@@ -57,6 +57,9 @@ pub struct Rincron {
 
     /// The spawned children
     child_processes: Vec<Child>,
+
+    /// The config root
+    config_root: String,
 }
 
 impl Rincron {
@@ -71,7 +74,25 @@ impl Rincron {
             reload: Arc::new(AtomicBool::new(false)),
             watch_interval: 100,
             child_processes: Vec::new(),
+            config_root: Self::get_config_root(),
         })
+    }
+
+    /// Returns the config directory for the current user
+    fn get_config_root() -> String {
+        let home_path = dirs::home_dir();
+
+        if home_path.is_none() {
+            return "/etc".to_string();
+        }
+        let home_pathbuf = home_path.unwrap();
+        let home_path = home_pathbuf.to_string_lossy();
+
+        if home_path == "/root" {
+            return "/etc".to_string();
+        }
+
+        format!("{}/.config", home_path)
     }
 
     /// Reads all config files
@@ -79,20 +100,24 @@ impl Rincron {
     /// Config files are found in /etc/rincron-mini directory
     /// If you don't want a folder, you can use /etc/rincron-mini.json
     pub fn read_configs(&mut self) {
+        let config_file = format!("{}/rincron-mini.json", &self.config_root);
+        let config_dir_pattern = format!("{}/rincron-mini/*.json", &self.config_root);
+
         self.manager.begin_transaction();
 
+        println!("Checking config file {}", &config_file);
+
         // First we check the main config file
-        if Path::new("/etc/rincron-mini.json").exists() {
-            if let Err(e) = self.read_config("/etc/rincron-mini.json") {
-                println!(
-                    "Error while reading config file /etc/rincron-mini.json: {}",
-                    e
-                );
+        if Path::new(&config_file).exists() {
+            if let Err(e) = self.read_config(&config_file) {
+                println!("Error while reading config file {}: {}", &config_file, e);
             }
         }
 
+        println!("Scanning config files {}", &config_dir_pattern);
+
         // After that, we check the folder for more config files
-        let files = glob("/etc/rincron-mini/*.json");
+        let files = glob(&config_dir_pattern);
 
         // It's horrible but I don't know how to properly write this (yet)
         if let Ok(v) = files {
