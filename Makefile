@@ -7,6 +7,7 @@ deb:
 	cp "assets/systemd/rincron-mini.service" "rincron-mini/etc/systemd/system/rincron-mini.service"
 	cp "assets/systemd/rincron-mini.user.service" "rincron-mini/etc/systemd/user/rincron-mini.service"
 	dpkg-deb --build rincron-mini
+	rm -rf rincron-mini
 
 clean:
 	cargo clean
