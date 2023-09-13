@@ -13,7 +13,7 @@ deb: build
 	cp "assets/systemd/rincron-mini.service" "${package_name}/etc/systemd/system/rincron-mini.service"
 	cp "assets/systemd/rincron-mini.user.service" "${package_name}/etc/systemd/user/rincron-mini.service"
 	dpkg-deb --build ${package_name}
-	rm -rf rincron-mini
+	rm -rf ${package_name}
 
 xz: build
 	mkdir -p "${package_name}/bin" "${package_name}/service/user" "${package_name}/service/system"
@@ -25,4 +25,4 @@ xz: build
 
 clean:
 	cargo clean
-	rm -rf "rincron-mini"
+	rm -rf ${package_name}
