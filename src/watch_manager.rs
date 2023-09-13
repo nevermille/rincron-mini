@@ -84,7 +84,7 @@ impl WatchManager {
         // We remove unecessary elements
         // This needs to be done before adding new element to avoid conflicts
         for (descriptor, element) in &self.previous_elements {
-            match inotify.rm_watch(descriptor.clone()) {
+            match inotify.watches().remove(descriptor.clone()) {
                 Err(e) => {
                     println!("Warning: error while removing inotify watch: {}", e);
                 }
@@ -96,7 +96,7 @@ impl WatchManager {
 
         // We add newly added elements
         for element in &self.new_elements {
-            let wd = inotify.add_watch(element.path.clone(), element.mask);
+            let wd = inotify.watches().add(element.path.clone(), element.mask);
 
             match wd {
                 Err(e) => {
