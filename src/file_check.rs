@@ -58,18 +58,19 @@ impl FileCheck {
         let file = Path::new(&self.path);
         if !file.exists() {
             print!("Warning: file does not exist: {}", self.path);
-            self.size = 0;
         }
 
         // Same with metadata reading
         let metadata = std::fs::metadata(&self.path);
-        if let Err(e) = &metadata {
-            print!("Warning: error while reading file metadata: {}", e);
-            self.size = 0;
-        }
 
         // Size extraction
-        let new_size = metadata.unwrap().len();
+        let new_size = match metadata {
+            Ok(v) => v.len(),
+            Err(e) => {
+                print!("Warning: error while reading file metadata: {}", e);
+                0
+            }
+        };
 
         println!(
             "File {} checked, was {} bytes long, now {}",
