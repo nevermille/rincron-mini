@@ -174,7 +174,7 @@ impl WatchElement {
         }
 
         // Try to add watch
-        let add = inotify.add_watch(in_dir, in_events.unwrap());
+        let add = inotify.watches().add(in_dir, in_events.unwrap());
 
         if let Err(e) = add {
             bail!("Unable to add watch: {}", e);
