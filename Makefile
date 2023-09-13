@@ -1,5 +1,5 @@
 version=0.3.1-rc2
-arch=$(shell uname --processor)
+arch=$(shell uname --machine)
 package_name="rincron-mini.${version}.${arch}"
 
 build:
